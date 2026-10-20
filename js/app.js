@@ -4,6 +4,8 @@ const $$ = (selector) => document.querySelectorAll(selector);
 let currentView = "lock";
 let currentApp = null;
 let currentChatId = null;
+let swipeStartX = 0;
+let swipeStartY = 0;
 
 function escapeHTML(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -39,6 +41,37 @@ updateClock();
 
 bindIfExists("#lockScreen", "click", unlock);
 bindIfExists("#lockScreen", "touchend", unlock);
+
+document.addEventListener("touchstart", (event) => {
+  const touch = event.changedTouches?.[0];
+  if (!touch) return;
+  swipeStartX = touch.clientX;
+  swipeStartY = touch.clientY;
+}, { passive: true });
+
+document.addEventListener("touchend", (event) => {
+  const touch = event.changedTouches?.[0];
+  if (!touch) return;
+  const dx = touch.clientX - swipeStartX;
+  const dy = touch.clientY - swipeStartY;
+
+  if (currentView === "lock" && (dx > 60 || dx < -60 || dy < -60)) {
+    unlock();
+    return;
+  }
+
+  if (currentView === "app" && currentApp === "whatsapp" && currentChatId) {
+    if (dx < -70) {
+      currentChatId = null;
+      renderWhatsAppList($("#appContent"));
+    }
+    return;
+  }
+
+  if (currentView === "app" && !currentChatId && dx > 70) {
+    $("#backBtn")?.click();
+  }
+}, { passive: true });
 
 function unlock() {
   if (currentView !== "lock") return;
@@ -82,7 +115,7 @@ function renderHome() {
 
   const widget = document.createElement("div");
   widget.className = "widget-large";
-  widget.innerHTML = `<div style="font-size:13px;color:#666">Partner Within</div><div style="font-size:24px">一些重要的人，和一些日常</div><div style="font-size:12px;color:#888">聊天记录、事件与角色设置都保存在当前浏览器中</div>`;
+  widget.innerHTML = `<div style="font-size:13px;color:#666">Partner Within</div><div style="font-size:24px">一些重要的人，和一些日常</div><div style="font-size:12px;color:#888">聊天 / 记录 / 相伴</div>`;
   grid.appendChild(widget);
 
   updateBadges();
@@ -128,7 +161,7 @@ function renderWhatsAppList(container) {
     const last = escapeHTML(contact.lastMessage || "新对话");
     const time = escapeHTML(contact.lastTime || "");
     const badge = Number(contact.unread) > 0 ? `<span class="wa-unread">${Number(contact.unread)}</span>` : "";
-    html += `<div class="wa-chat-item" data-id="${escapeHTML(contact.id)}"><div class="wa-avatar">${escapeHTML(contact.avatar || "👤")}</div><div class="wa-info"><div class="wa-name">${escapeHTML(contact.name)}</div><div class="wa-last"><span>${last}</span><small>${time}</small></div></div>${badge}</div>`;
+    html += `<div class="wa-chat-item" data-id="${escapeHTML(contact.id)}"><div class="wa-avatar">${escapeHTML(contact.avatar || "👤")}</div><div class="wa-info"><div class="wa-name">${escapeHTML(contact.name)}</div><div class="wa-preview">${last}</div></div><div class="wa-meta"><span>${time}</span>${badge}</div></div>`;
   });
 
   container.innerHTML = html + "</div>";
@@ -146,7 +179,7 @@ function openChat(id) {
   saveData(appData);
   updateBadges();
 
-  let html = `<div class="chat-view"><div class="wa-header"><button id="chatBack">‹</button><span>${escapeHTML(contact.avatar || "👤")} ${escapeHTML(contact.name)}</span><span style="margin-left:auto;font-size:12px;font-weight:500">${escapeHTML(contact.relation || "")}</span></div><div id="chatMessages" class="chat-messages">`;
+  let html = `<div class="chat-view"><div class="wa-header"><button id="chatBack">‹</button><span>${escapeHTML(contact.avatar || "👤")} ${escapeHTML(contact.name)}</span><span style="margin-left:auto; font-size:12px">${escapeHTML(contact.relation || "")}</span></div><div id="chatMessages" class="chat-messages">`;
 
   (contact.messages || []).forEach((message) => {
     html += `<div class="bubble ${message.from === "me" ? "me" : "them"}">${escapeHTML(message.text)}<div class="time">${escapeHTML(message.time || "")}</div></div>`;
@@ -190,10 +223,6 @@ function sendMessage() {
   openChat(contact.id);
 
   setTimeout(() => {
-    if (typeof window.sendMessage === "function" && window.sendMessage !== sendMessage) {
-      return;
-    }
-
     if (!window.PersonaEngine || typeof window.PersonaEngine.localReply !== "function") {
       const fallback = "我在听，你继续说。";
       contact.messages.push({ from: "them", text: fallback, time: getCurrentTimeStr() });
@@ -368,3 +397,5 @@ window.escapeHTML = escapeHTML;
 window.currentView = () => currentView;
 window.currentChatId = () => currentChatId;
 window.appData = appData;
+window.sendMessage = sendMessage;
+
