@@ -240,7 +240,8 @@ async function getAiReply(contact,userText){
    content:m.text
   }));
 
- const res = await fetch("https://likedtalking-ai.你的Cloudflare子域.workers.dev/api/chat", {
+ const res = await fetch(
+  "https://likedtalking-ai.你的Cloudflare子域.workers.dev/api/chat",{
   method:"POST",
   headers:{
    "Content-Type":"application/json"
