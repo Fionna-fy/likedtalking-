@@ -34,14 +34,22 @@ function triggerRandomEvent() {
   }
 
   const msg = (template.text || "刚刚想到你了.").slice(0, 240);
+  const aiMessage = { from: "them", text: msg, time: getCurrentTimeStr() };
   contact.messages = Array.isArray(contact.messages) ? contact.messages : [];
-  contact.messages.push({ from: "them", text: msg, time: getCurrentTimeStr() });
+  contact.messages.push(aiMessage);
   contact.lastMessage = msg;
   contact.lastTime = "刚刚";
-  contact.unread = (Number(contact.unread) || 0) + 1;
+
+  // 用户正在该聊天页时直接追加气泡，否则增加未读
+  if (typeof currentChatId !== "undefined" && currentChatId === contact.id && typeof appendChatMessage === "function") {
+    appendChatMessage(contact, aiMessage);
+  } else {
+    contact.unread = (Number(contact.unread) || 0) + 1;
+    showToast(contact.name + ": " + msg);
+  }
+
   appData = saveData(appData);
-  updateBadges();
-  showToast(contact.name + ": " + msg);
+  if (typeof updateBadges === "function") updateBadges();
 }
 
 function showToast(msg) {
