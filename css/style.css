@@ -446,7 +446,12 @@ button {
   inset: 58px 0 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 14px;
+  padding: 0;
+}
+
+#appContent.chat-open {
+  overflow: hidden;
+  padding: 0;
 }
 
 #appContent h2,
@@ -464,7 +469,172 @@ button {
   max-width: 100%;
 }
 
-/* General cards and chat elements */
+/* ========== WhatsApp list & chat (restored) ========== */
+
+.wa-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #075e54;
+  color: white;
+  padding: 12px 14px;
+  font-weight: 600;
+}
+
+.wa-header button {
+  background: none;
+  border: 0;
+  color: #fff;
+  font-size: 22px;
+  padding: 0 4px;
+}
+
+.wa-list {
+  background: #e5ddd5;
+  min-height: 100%;
+}
+
+.wa-chat-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+}
+
+.wa-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #ddd;
+  font-size: 23px;
+  flex-shrink: 0;
+}
+
+.wa-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.wa-name {
+  font-weight: 650;
+}
+
+.wa-last {
+  font-size: 13px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 4px;
+}
+
+.wa-meta {
+  text-align: right;
+  color: #999;
+  font-size: 11px;
+}
+
+.wa-unread {
+  display: inline-block;
+  background: #25d366;
+  color: #fff;
+  border-radius: 10px;
+  padding: 2px 6px;
+  margin-top: 4px;
+}
+
+.chat-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: #e5ddd5;
+}
+
+.chat-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* Critical: bubble styles (were missing → pure text) */
+.bubble {
+  max-width: 82%;
+  padding: 9px 11px;
+  border-radius: 13px;
+  font-size: 15px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bubble.them {
+  align-self: flex-start;
+  background: white;
+  border-top-left-radius: 4px;
+}
+
+.bubble.me {
+  align-self: flex-end;
+  background: #dcf8c6;
+  border-top-right-radius: 4px;
+}
+
+.bubble.typing {
+  opacity: .75;
+}
+
+.bubble .time {
+  font-size: 10px;
+  color: #888;
+  text-align: right;
+  margin-top: 3px;
+}
+
+.chat-input-bar {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: #f5f5f5;
+  align-items: center;
+}
+
+.chat-input-bar input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-radius: 20px;
+  padding: 11px 14px;
+  outline: none;
+  background: #fff;
+}
+
+.chat-input-bar button {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 50%;
+  background: #075e54;
+  color: white;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 16px;
+}
+
+/* General cards and legacy message styles */
 
 .card,
 .contact-card,
@@ -513,12 +683,6 @@ button {
 .message.sent {
   margin-left: auto;
   background: #d9cff8;
-}
-
-.chat-messages {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
 }
 
 .chat-input-row {
@@ -636,6 +800,26 @@ button {
 .config-panel button.danger {
   color: #b63d50;
   background: #fbe9ed;
+}
+
+#contactList {
+  max-height: 130px;
+  overflow: auto;
+}
+
+.contact-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.contact-row button {
+  width: auto;
+  padding: 5px 10px;
+  margin: 0;
 }
 
 /* Incoming call screen */
@@ -773,4 +957,3 @@ img {
     animation-duration: 0.01ms !important;
   }
 }
-
