@@ -1,480 +1,956 @@
-const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
-let currentView="lock",currentApp=null,currentChatId=null;
+/* Partner Within — iPhone interface */
 
-function updateClock(){
- const d=new Date(),h=d.getHours(),m=String(d.getMinutes()).padStart(2,"0");
- $("#lockTime").textContent=((h%12)||12)+":"+m;
- $("#homeTime").textContent=String(h).padStart(2,"0")+":"+m;
- $("#lockDate").textContent=`${d.getMonth()+1}月${d.getDate()}日周${"日一二三四五六"[d.getDay()]}`;
-}
-setInterval(updateClock,10000);
-updateClock();
-
-$("#lockScreen").addEventListener("click",unlock);
-$("#lockScreen").addEventListener("touchend",unlock);
-
-function unlock(){
- if(currentView!=="lock")return;
- $("#lockScreen").classList.remove("active");
- $("#homeScreen").classList.add("active");
- currentView="home";
- renderHome();
- startEventLoop();
+:root {
+  --phone-width: 390px;
+  --phone-height: 844px;
+  --ink: #24232b;
+  --muted: #777581;
+  --purple: #8b78dc;
+  --glass: rgba(255, 255, 255, 0.72);
 }
 
-function renderHome(){
- const grid=$("#appGrid");
- grid.innerHTML="";
-
- const folders=[
-  ["Safari",["🧭","🔍","⭐","📑"]],
-  ["Editing",["✂️","🎬","🖼️","🎨"]],
-  ["Shopping",["🛒","📦","💳","🏷️"]],
-  ["QQ",["🐧"]],
-  ["Game",["🎮","🕹️","🏆","👾"]],
-  ["Study",["📖","✏️","🧮","🎓"]],
-  ["Trip",["✈️","🚇","🗺️","🏨"]],
-  ["Economic",["💰","📊","🏦","📈"]]
- ];
-
- folders.forEach(([name,icons])=>{
-  const el=document.createElement("div");
-  el.className="folder";
-  el.innerHTML=`<div class="folder-inner">${icons.map(x=>`<span>${x}</span>`).join("")}</div><div class="folder-name">${name}</div>`;
-  el.onclick=()=>openApp("folder",name);
-  grid.appendChild(el);
- });
-
- const wa=document.createElement("div");
- wa.className="app-icon";
-
- const unread=appData.contacts.reduce((n,c)=>n+(c.unread||0),0);
-
- wa.innerHTML=`
-  <div class="app-icon-inner" style="background:linear-gradient(135deg,#25d366,#128c7e)">
-   💬${unread?`<span class="badge">${unread}</span>`:""}
-  </div>
-  <div class="app-name">WhatsApp</div>
- `;
-
- wa.onclick=()=>openApp("whatsapp");
- grid.appendChild(wa);
-
- const widget=document.createElement("div");
- widget.className="widget-large";
- widget.innerHTML=`
-  <div style="font-size:13px;color:#666">Partner Within</div>
-  <div style="font-size:24px">一些重要的人，和一些日常</div>
-  <div style="font-size:12px;color:#888">聊天记录保存在当前浏览器</div>
- `;
- grid.appendChild(widget);
-
- updateBadges();
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
-function updateBadges(){
- const n=appData.contacts.reduce((s,c)=>s+(c.unread||0),0);
- const b=$("#msgBadge");
-
- if(b){
-  b.textContent=n||"";
-  b.style.display=n?"flex":"none";
- }
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  color: var(--ink);
 }
 
-function openApp(type,extra){
- currentApp=type;
- $("#homeScreen").classList.remove("active");
- $("#appScreen").classList.add("active");
- currentView="app";
- currentChatId=null;
-
- $("#appTitle").textContent=
-  type==="whatsapp"?"WhatsApp":
-  type==="folder"?extra:
-  type==="wechat"?"微信（演示）":
-  type;
-
- if(type==="whatsapp"){
-  renderWhatsAppList($("#appContent"));
- }else{
-  $("#appContent").innerHTML=`
-   <div style="padding:35px;text-align:center;color:#666">
-    ${type==="folder"?"文件夹「"+extra+"」":"这个应用暂时是展示界面"}
-   </div>
-  `;
- }
+body {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background:
+    radial-gradient(ellipse at 15% 15%, #e8dcfa 0, transparent 42%),
+    radial-gradient(ellipse at 85% 85%, #f7dfe9 0, transparent 40%),
+    #eeeaf3;
+  padding: 20px;
+  overflow-x: hidden;
 }
 
-function renderWhatsAppList(container){
- let html=`
-  <div class="wa-header">
-   <span style="font-size:20px">WhatsApp</span>
-   <span style="margin-left:auto;font-size:12px">聊天</span>
-  </div>
-  <div class="wa-list">
- `;
-
- appData.contacts.forEach(c=>{
-  html+=`
-   <div class="wa-chat-item" data-id="${c.id}">
-    <div class="wa-avatar">${c.avatar||"👤"}</div>
-    <div class="wa-info">
-     <div class="wa-name">${escapeHTML(c.name)}</div>
-     <div class="wa-last">${escapeHTML(c.lastMessage||"")}</div>
-    </div>
-    <div class="wa-meta">
-     <div>${c.lastTime||""}</div>
-     ${c.unread?`<div class="wa-unread">${c.unread}</div>`:""}
-    </div>
-   </div>
-  `;
- });
-
- container.innerHTML=html+"</div>";
- $$(".wa-chat-item").forEach(e=>e.onclick=()=>openChat(e.dataset.id));
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
-function createBubble(m){
- const div=document.createElement("div");
- div.className=`bubble ${m.from==="me"?"me":"them"}`;
- div.innerHTML=`
-  ${escapeHTML(m.text)}
-  <div class="time">${escapeHTML(m.time||"")}</div>
- `;
- return div;
+button {
+  cursor: pointer;
 }
 
-function appendChatMessage(c,m){
- const box=$("#chatMessages");
- if(!box)return;
-
- const nearBottom=
-  box.scrollHeight-box.scrollTop-box.clientHeight<140;
-
- box.appendChild(createBubble(m));
-
- if(nearBottom||m.from==="me"){
-  scrollToChatBottom();
- }
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
 }
 
-function scrollToChatBottom(force=false){
- const box=$("#chatMessages");
- if(!box)return;
-
- requestAnimationFrame(()=>{
-  box.scrollTop=box.scrollHeight;
- });
+#phone {
+  width: min(var(--phone-width), 100%);
+  height: min(var(--phone-height), calc(100dvh - 40px));
+  min-height: 560px;
+  position: relative;
+  overflow: hidden;
+  background: #f7f5fa;
+  border: 8px solid #25242b;
+  border-radius: 48px;
+  box-shadow:
+    0 30px 80px rgba(42, 32, 65, 0.24),
+    0 5px 16px rgba(42, 32, 65, 0.12);
 }
 
-function showTyping(){
- const box=$("#chatMessages");
- if(!box)return null;
-
- const typing=document.createElement("div");
- typing.className="bubble them typing";
- typing.textContent="正在输入…";
-
- box.appendChild(typing);
- scrollToChatBottom();
-
- return typing;
+#screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 39px;
+  background: #f5f2f9;
+  isolation: isolate;
 }
 
-function openChat(id){
- currentChatId=id;
+.screen-layer {
+  position: absolute;
+  inset: 0;
+  display: none;
+  overflow: hidden;
+}
 
- const c=appData.contacts.find(x=>x.id===id);
- if(!c)return;
+.screen-layer.active {
+  display: block;
+}
 
- c.unread=0;
- saveData(appData);
- updateBadges();
+/* Lock screen */
 
- $("#appContent").innerHTML=`
-  <div class="chat-view">
-   <div class="wa-header">
-    <button id="chatBack">‹</button>
-    <span>${c.avatar||"👤"} ${escapeHTML(c.name)}</span>
-    <span style="margin-left:auto;font-size:12px;font-weight:400">${escapeHTML(c.emotion||"")}</span>
-   </div>
+#lockScreen {
+  color: white;
+  background:
+    radial-gradient(ellipse at 20% 25%, rgba(255, 210, 239, .9), transparent 35%),
+    radial-gradient(ellipse at 80% 42%, rgba(191, 173, 255, .85), transparent 38%),
+    radial-gradient(ellipse at 35% 80%, rgba(106, 104, 185, .95), transparent 42%),
+    linear-gradient(145deg, #c5a8e7, #7c78b8 55%, #d5b6d8);
+}
 
-   <div class="chat-messages" id="chatMessages"></div>
+#lockScreen::before {
+  content: "";
+  position: absolute;
+  width: 260px;
+  height: 420px;
+  top: 150px;
+  left: -85px;
+  border-radius: 50%;
+  transform: rotate(-35deg);
+  background: linear-gradient(140deg, rgba(255,255,255,.36), rgba(255,255,255,0));
+  filter: blur(8px);
+}
 
-   <div class="chat-input-bar">
-    <input id="chatInput" type="text" placeholder="输入消息..." autocomplete="off"/>
-    <button id="sendBtn">➤</button>
-   </div>
-  </div>
- `;
+.status-bar {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 43px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 23px;
+  font-size: 12px;
+  font-weight: 650;
+}
 
- $("#appContent").classList.add("chat-open");
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
 
- const box=$("#chatMessages");
- (c.messages||[]).forEach(m=>box.appendChild(createBubble(m)));
+.lock-date {
+  position: absolute;
+  top: 105px;
+  width: 100%;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: .5px;
+}
 
- $("#chatBack").onclick=()=>{
-  currentChatId=null;
-  $("#appContent").classList.remove("chat-open");
-  renderWhatsAppList($("#appContent"));
- };
+.lock-time {
+  position: absolute;
+  top: 128px;
+  width: 100%;
+  text-align: center;
+  font-size: clamp(76px, 21vw, 100px);
+  font-weight: 250;
+  letter-spacing: -5px;
+  line-height: 1.2;
+}
 
- $("#sendBtn").onclick=()=>sendMessage();
+.lock-widgets {
+  position: absolute;
+  top: 260px;
+  left: 20px;
+  right: 20px;
+}
 
- $("#chatInput").onkeydown=e=>{
-  if(e.key==="Enter"){
-   e.preventDefault();
-   sendMessage();
+.widget-row {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.widget.circle {
+  width: 53px;
+  height: 53px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 50%;
+  background: rgba(255,255,255,.17);
+  backdrop-filter: blur(14px);
+  font-size: 21px;
+}
+
+.lock-bottom {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  bottom: 65px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lock-btn {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(30, 28, 42, .24);
+  font-size: 21px;
+  backdrop-filter: blur(12px);
+}
+
+.lock-name {
+  font-size: 15px;
+  font-weight: 600;
+  text-shadow: 0 2px 8px rgba(0,0,0,.18);
+}
+
+.swipe-hint {
+  position: absolute;
+  bottom: 27px;
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 1px;
+  opacity: .9;
+}
+
+#lockScreen::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  width: 125px;
+  height: 4px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.9);
+  transform: translateX(-50%);
+}
+
+/* Home screen */
+
+#homeScreen {
+  background:
+    radial-gradient(ellipse at 10% 18%, rgba(251, 219, 238, .92), transparent 42%),
+    radial-gradient(ellipse at 88% 55%, rgba(199, 186, 255, .9), transparent 45%),
+    linear-gradient(155deg, #d5c4f0, #f2dce9 48%, #bdb9e6);
+}
+
+.status-bar.dark {
+  color: #24212b;
+}
+
+.home-content {
+  position: absolute;
+  inset: 65px 20px 115px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.home-content::-webkit-scrollbar {
+  display: none;
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: 13px;
+  row-gap: 24px;
+  padding-top: 8px;
+}
+
+.app-icon,
+.app-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: #282431;
+  text-align: center;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.app-icon-image,
+.app-emoji {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: rgba(255,255,255,.84);
+  box-shadow: 0 4px 12px rgba(54, 41, 78, .12);
+  font-size: 27px;
+}
+
+.app-icon {
+  cursor: pointer;
+}
+
+.app-icon:active,
+.dock-app:active {
+  transform: scale(.93);
+}
+
+.search-bar {
+  margin-top: 28px;
+  height: 35px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid rgba(255,255,255,.55);
+  border-radius: 18px;
+  background: rgba(255,255,255,.4);
+  color: #514b5c;
+  font-size: 13px;
+  backdrop-filter: blur(15px);
+}
+
+.dock {
+  position: absolute;
+  bottom: 18px;
+  left: 14px;
+  right: 14px;
+  height: 83px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  border: 1px solid rgba(255,255,255,.5);
+  border-radius: 27px;
+  background: rgba(255,255,255,.38);
+  backdrop-filter: blur(24px);
+}
+
+.dock-app {
+  position: relative;
+  width: 53px;
+  height: 53px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: rgba(255,255,255,.85);
+  box-shadow: 0 3px 10px rgba(54,41,78,.12);
+  font-size: 26px;
+  cursor: pointer;
+  transition: transform .15s ease;
+}
+
+.badge {
+  position: absolute;
+  top: -5px;
+  right: -7px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border: 2px solid white;
+  border-radius: 12px;
+  background: #ed4d58;
+  color: white;
+  font-size: 10px;
+}
+
+/* Notification preview */
+
+.notif-preview {
+  position: absolute;
+  z-index: 5;
+  top: 48px;
+  left: 12px;
+  right: 12px;
+  padding: 13px;
+  border: 1px solid rgba(255,255,255,.55);
+  border-radius: 20px;
+  background: rgba(250,248,253,.82);
+  color: #292632;
+  box-shadow: 0 8px 24px rgba(40,30,60,.12);
+  backdrop-filter: blur(24px);
+}
+
+.notif-preview.hidden {
+  display: none;
+}
+
+.notif-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.notif-item {
+  padding: 9px 0;
+  border-top: 1px solid rgba(80,70,100,.12);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.notif-item span {
+  float: right;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+/* App screen */
+
+#appScreen {
+  background: #f7f6fa;
+  color: var(--ink);
+}
+
+.app-header {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: 0;
+  right: 0;
+  min-height: 58px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid rgba(50,40,70,.08);
+  background: rgba(250,249,252,.94);
+  backdrop-filter: blur(16px);
+}
+
+.app-header span {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.app-header button,
+button {
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: #eeeaf7;
+  color: #373044;
+}
+
+.app-header button {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+#appContent {
+  position: absolute;
+  inset: 58px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px;
+}
+
+#appContent h2,
+#appContent h3 {
+  margin-top: 8px;
+}
+
+#appContent button {
+  margin: 3px;
+}
+
+#appContent input,
+#appContent textarea,
+#appContent select {
+  max-width: 100%;
+}
+
+/* General cards and chat elements */
+
+.card,
+.contact-card,
+.chat-card,
+.message-card,
+.settings-card {
+  padding: 14px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(60,45,80,.08);
+  border-radius: 17px;
+  background: white;
+  box-shadow: 0 3px 12px rgba(45,35,65,.04);
+}
+
+.contact-card,
+.chat-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #e9e1fa;
+  font-size: 22px;
+}
+
+.message {
+  width: fit-content;
+  max-width: 84%;
+  margin: 8px 0;
+  padding: 10px 13px;
+  border-radius: 17px;
+  background: #ece9f2;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.message.me,
+.message.sent {
+  margin-left: auto;
+  background: #d9cff8;
+}
+
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.chat-input-row input {
+  min-width: 0;
+  flex: 1;
+}
+
+/* WhatsApp-like chat layout */
+
+.chat-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #f0f2f5;
+}
+
+#chatMessages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 10px 14px;
+  background:
+    linear-gradient(180deg, rgba(220, 248, 198, 0.18), rgba(240, 242, 245, 0.2)),
+    linear-gradient(180deg, #eae6df 0%, #f0f2f5 100%);
+}
+
+.wa-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 58px;
+  padding: 0 12px;
+  background: #f0f2f5;
+  border-bottom: 1px solid rgba(17, 24, 39, 0.08);
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.wa-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.wa-chat-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.42);
+  cursor: pointer;
+}
+
+.wa-chat-item:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.wa-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #e9e7ff;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.wa-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.wa-name {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 3px;
+  color: #111827;
+}
+
+.wa-last {
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wa-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.wa-unread {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 7px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #25d366;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.bubble {
+  max-width: 72%;
+  padding: 9px 12px 8px;
+  border-radius: 14px;
+  line-height: 1.5;
+  font-size: 14px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
+}
+
+.bubble.them {
+  align-self: flex-start;
+  background: #ffffff;
+  color: #1f2937;
+  border-top-left-radius: 5px;
+}
+
+.bubble.me {
+  align-self: flex-end;
+  background: #d9fdd3;
+  color: #111827;
+  border-top-right-radius: 5px;
+}
+
+.bubble .time {
+  display: block;
+  margin-top: 5px;
+  font-size: 10px;
+  opacity: 0.7;
+  text-align: right;
+}
+
+.bubble.typing {
+  display: inline-flex;
+  align-self: flex-start;
+  background: #fff;
+  color: #6b7280;
+  font-size: 12px;
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
+.chat-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 12px;
+  background: #f0f2f5;
+  border-top: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+#chatInput {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #dfe3e8;
+  border-radius: 18px;
+  background: white;
+  color: #111827;
+  height: 40px;
+  padding: 0 14px;
+  outline: none;
+}
+
+#sendBtn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #25d366;
+  color: white;
+  font-size: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+/* Configuration overlay */
+
+.overlay {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 10px;
+  background: rgba(25, 21, 35, .45);
+  backdrop-filter: blur(5px);
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.config-panel {
+  width: 100%;
+  max-height: 94%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 16px 25px;
+  border-radius: 25px;
+  background: #fbfaff;
+  box-shadow: 0 15px 50px rgba(20,15,35,.22);
+  scrollbar-width: thin;
+}
+
+.config-panel h2 {
+  margin: 0 0 8px;
+  font-size: 21px;
+  letter-spacing: -.4px;
+}
+
+.config-panel h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.config-panel p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.config-panel .hint {
+  color: var(--muted);
+}
+
+.config-panel section {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #eeeaf5;
+  border-radius: 16px;
+  background: white;
+}
+
+.config-panel label {
+  display: block;
+  margin: 11px 0;
+  color: #494453;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.config-panel input:not([type="checkbox"]):not([type="file"]),
+.config-panel select,
+.config-panel textarea {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  margin-top: 5px;
+  padding: 9px 10px;
+  border: 1px solid #e2deeb;
+  border-radius: 10px;
+  background: #fff;
+  color: #302b3b;
+  font-size: 13px;
+}
+
+.config-panel input[type="checkbox"] {
+  margin-right: 7px;
+  accent-color: var(--purple);
+}
+
+.config-panel button {
+  margin: 4px 4px 4px 0;
+  font-size: 12px;
+}
+
+.config-panel button.primary {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  background: #8170d4;
+  color: white;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.config-panel button.danger {
+  color: #b63d50;
+  background: #fbe9ed;
+}
+
+/* Incoming call screen */
+
+.call-ui {
+  width: 100%;
+  min-height: 58%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+  border-radius: 27px;
+  background: linear-gradient(160deg, #f3effb, #e5dcf8);
+  color: #282331;
+}
+
+.call-avatar {
+  width: 100px;
+  height: 100px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 20px;
+  border-radius: 50%;
+  background: #d7c9f5;
+  font-size: 48px;
+}
+
+.call-name {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.call-status {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.call-actions {
+  width: 100%;
+  display: flex;
+  justify-content: space-around;
+  margin-top: 55px;
+}
+
+.call-actions button {
+  width: 95px;
+  height: 48px;
+  border-radius: 24px;
+  color: white;
+  font-weight: 600;
+}
+
+.call-actions .decline {
+  background: #e55361;
+}
+
+.call-actions .accept {
+  background: #3ab879;
+}
+
+/* Common utility classes */
+
+.hidden {
+  display: none !important;
+}
+
+img {
+  max-width: 100%;
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 0;
+    background: #111;
+    align-items: center;
   }
- };
 
- scrollToChatBottom(true);
-}
-
-async function getAiReply(contact,userText){
- const history=(contact.messages||[])
-  .slice(-12)
-  .map(m=>({
-   role:m.from==="me"?"user":"assistant",
-   content:m.text
-  }));
-
- const res = await fetch(
-  "https://likedtalking-ai.lfy9291031.workers.dev/api/chat",{
-  method:"POST",
-  headers:{
-   "Content-Type":"application/json"
-  },
-  body:JSON.stringify({
-   message:userText,
-   history,
-   persona:{
-    name:contact.name,
-    relation:contact.relation,
-    personality:contact.personality,
-    emotion:contact.emotion,
-    relationshipScore:contact.relationshipScore,
-    memories:contact.memories
-   }
-  })
- });
-
- if(!res.ok){
-  throw new Error(`AI request failed: ${res.status}`);
- }
-
- const data=await res.json();
- return data.reply||"……";
-}
-
-async function sendMessage(){
- const input=$("#chatInput");
- const text=input?.value.trim();
-
- if(!text||!currentChatId)return;
-
- const c=appData.contacts.find(x=>x.id===currentChatId);
- if(!c)return;
-
- const userMessage={
-  from:"me",
-  text,
-  time:getCurrentTimeStr()
- };
-
- c.messages.push(userMessage);
- c.lastMessage=text;
- c.lastTime="刚刚";
- saveData(appData);
-
- input.value="";
- appendChatMessage(c,userMessage);
-
- const typing=showTyping();
-
- let reply;
-
- try{
-  reply=await getAiReply(c,text);
- }catch(err){
-  console.warn("后端 AI 不可用，使用本地回复：",err);
-  reply=PersonaEngine.localReply(c,text);
- }
-
- if(typing)typing.remove();
-
- const aiMessage={
-  from:"them",
-  text:reply,
-  time:getCurrentTimeStr()
- };
-
- c.messages.push(aiMessage);
- c.lastMessage=reply;
- c.lastTime="刚刚";
- saveData(appData);
-
- if(currentChatId===c.id){
-  appendChatMessage(c,aiMessage);
- }else{
-  c.unread=(c.unread||0)+1;
-  updateBadges();
-  showToast(`${c.name}: ${reply}`);
- }
-}
-
-window.sendMessage=sendMessage;
-
-$("#backBtn").onclick=()=>{
- if(currentChatId){
-  currentChatId=null;
-  $("#appContent").classList.remove("chat-open");
-  renderWhatsAppList($("#appContent"));
-  return;
- }
-
- $("#appScreen").classList.remove("active");
- $("#homeScreen").classList.add("active");
- currentView="home";
- currentApp=null;
- renderHome();
-};
-
-$("#configBtn").onclick=openConfig;
-$("#closeConfig").onclick=closeConfig;
-
-function openConfig(){
- $("#configOverlay").classList.remove("hidden");
-
- $("#cfgOwnerName").value=appData.owner.name||"Fionna";
- $("#cfgWallpaper").value=appData.owner.wallpaper||"purple";
- $("#cfgEvents").checked=appData.eventsEnabled!==false;
- $("#cfgEventFreq").value=appData.eventFreq||"medium";
-
- const list=$("#contactList");
- list.innerHTML="";
-
- appData.contacts.forEach(c=>{
-  const row=document.createElement("div");
-  row.className="contact-row";
-  row.innerHTML=`
-   <span>${c.avatar||"👤"} ${escapeHTML(c.name)} <small>(${escapeHTML(c.relation||"")})</small></span>
-   <button class="del-contact" data-id="${c.id}">删除</button>
-  `;
-  list.appendChild(row);
- });
-
- $$(".del-contact").forEach(b=>b.onclick=()=>{
-  appData.contacts=appData.contacts.filter(c=>c.id!==b.dataset.id);
-  saveData(appData);
-  openConfig();
- });
-}
-
-function closeConfig(){
- appData.owner.name=$("#cfgOwnerName").value||"Fionna";
- appData.owner.wallpaper=$("#cfgWallpaper").value;
- appData.eventsEnabled=$("#cfgEvents").checked;
- appData.eventFreq=$("#cfgEventFreq").value;
-
- saveData(appData);
- applyWallpaper();
- startEventLoop();
-
- $("#configOverlay").classList.add("hidden");
-
- if(currentView==="home")renderHome();
-}
-
-function applyWallpaper(){
- const h=$("#homeScreen");
- h.style.background=
-  appData.owner.wallpaper==="purple"?
-  "linear-gradient(155deg,#d8c0ed,#8175bd 48%,#33254e)":
-  "linear-gradient(145deg,#f3eee9,#d9d3d0)";
-}
-
-$("#addContactBtn").onclick=()=>{
- const name=prompt("联系人名字：");
- if(!name)return;
-
- appData.contacts.push({
-  id:"c"+Date.now(),
-  name,
-  avatar:"👤",
-  relation:"自定义",
-  personality:"自然、真诚，有自己的想法。",
-  emotion:"自然",
-  relationshipScore:20,
-  memories:[],
-  lastMessage:"新对话",
-  lastTime:"刚刚",
-  unread:0,
-  messages:[{
-   from:"them",
-   text:"嗨，终于聊上了。",
-   time:getCurrentTimeStr()
-  }]
- });
-
- saveData(appData);
- openConfig();
-};
-
-$("#exportBtn").onclick=()=>{
- const a=document.createElement("a");
- const url=URL.createObjectURL(
-  new Blob([JSON.stringify(appData,null,2)],{type:"application/json"})
- );
-
- a.href=url;
- a.download="partnerwithin-data.json";
- a.click();
- URL.revokeObjectURL(url);
-};
-
-$("#importBtn").onclick=()=>$("#importFile").click();
-
-$("#importFile").onchange=e=>{
- const file=e.target.files[0];
- if(!file)return;
-
- const r=new FileReader();
-
- r.onload=ev=>{
-  try{
-   appData=JSON.parse(ev.target.result);
-   saveData(appData);
-   alert("导入成功");
-   openConfig();
-  }catch(err){
-   alert("导入失败：JSON 格式不正确");
+  #phone {
+    width: 100vw;
+    height: 100dvh;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
- };
 
- r.readAsText(file);
-};
+  #screen {
+    border-radius: 0;
+  }
 
-$("#resetBtn").onclick=()=>{
- if(confirm("确定重置？重置前请先导出备份。")){
-  localStorage.removeItem("phoneSimData");
-  location.reload();
- }
-};
+  .lock-time {
+    top: 125px;
+  }
 
-$$(".dock-app").forEach(e=>{
- e.onclick=()=>openApp(e.dataset.app==="messages"?"whatsapp":e.dataset.app);
-});
+  .lock-widgets {
+    top: 255px;
+  }
 
-function escapeHTML(s){
- return String(s??"").replace(/[&<>"']/g,c=>({
-  "&":"&amp;",
-  "<":"&lt;",
-  ">":"&gt;",
-  '"':"&quot;",
-  "'":"&#39;"
- }[c]));
+  .config-panel {
+    max-height: 92%;
+  }
 }
 
-applyWallpaper();
+@media (max-height: 650px) {
+  .lock-date {
+    top: 65px;
+  }
+
+  .lock-time {
+    top: 85px;
+    font-size: 76px;
+  }
+
+  .lock-widgets {
+    top: 190px;
+  }
+
+  .lock-bottom {
+    bottom: 48px;
+  }
+
+  .swipe-hint {
+    bottom: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+

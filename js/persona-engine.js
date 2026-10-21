@@ -1,267 +1,489 @@
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+let currentView="lock",currentApp=null,currentChatId=null;
 
-(function(){
-"use strict";
+function updateClock(){
+  const d=new Date(),h=d.getHours(),m=String(d.getMinutes()).padStart(2,"0");
+  $("#lockTime").textContent=((h%12)||12)+":"+m;
+  $("#homeTime").textContent=String(h).padStart(2,"0")+":"+m;
+  $("#lockDate").textContent=`${d.getMonth()+1}月${d.getDate()}日周${"日一二三四五六"[d.getDay()]}`;
+}
+setInterval(updateClock,10000);
+updateClock();
 
-const KEY="partnerWithinAI";
-const $=s=>document.querySelector(s);
-const defaults={enabled:false,endpoint:"",model:"",temperature:0.8};
+$("#lockScreen").addEventListener("click",unlock);
+$("#lockScreen").addEventListener("touchend",unlock);
 
-function settings(){
- try{
-  return {...defaults,...JSON.parse(localStorage.getItem(KEY)||"{}")};
- }catch(e){
-  return {...defaults};
- }
+function unlock(){
+  if(currentView!=="lock")return;
+  $("#lockScreen").classList.remove("active");
+  $("#homeScreen").classList.add("active");
+  currentView="home";
+  renderHome();
+  startEventLoop();
 }
 
-function saveSettings(p){
- const v={...settings(),...p};
- localStorage.setItem(KEY,JSON.stringify(v));
- return v;
+function renderHome(){
+  const grid=$("#appGrid");
+  grid.innerHTML="";
+
+  const folders=[
+   ["Safari",["🧭","🔍","⭐","📑"]],
+   ["Editing",["✂️","🎬","🖼️","🎨"]],
+   ["Shopping",["🛒","📦","💳","🏷️"]],
+   ["QQ",["🐧"]],
+   ["Game",["🎮","🕹️","🏆","👾"]],
+   ["Study",["📖","✏️","🧮","🎓"]],
+   ["Trip",["✈️","🚇","🗺️","🏨"]],
+   ["Economic",["💰","📊","🏦","📈"]]
+  ];
+
+  folders.forEach(([name,icons])=>{
+   const el=document.createElement("div");
+   el.className="folder";
+   el.innerHTML=`<div class="folder-inner">${icons.map(x=>`<span>${x}</span>`).join("")}</div><div class="folder-name">${name}</div>`;
+   el.onclick=()=>openApp("folder",name);
+   grid.appendChild(el);
+  });
+
+  const wa=document.createElement("div");
+  wa.className="app-icon";
+
+  const unread=appData.contacts.reduce((n,c)=>n+(c.unread||0),0);
+
+  wa.innerHTML=`
+   <div class="app-icon-inner" style="background:linear-gradient(135deg,#25d366,#128c7e)">
+    💬${unread?`<span class="badge">${unread}</span>":""}
+   </div>
+   <div class="app-name">WhatsApp</div>
+  `;
+
+  wa.onclick=()=>openApp("whatsapp");
+  grid.appendChild(wa);
+
+  const widget=document.createElement("div");
+  widget.className="widget-large";
+  widget.innerHTML=`
+   <div style="font-size:13px;color:#666">Partner Within</div>
+   <div style="font-size:24px">一些重要的人，和一些日常</div>
+   <div style="font-size:12px;color:#888">聊天记录保存在当前浏览器</div>
+  `;
+  grid.appendChild(widget);
+
+  updateBadges();
 }
 
-function promptFor(c){
- return [
-  "你是 Partner Within 中一个独立、持续存在的虚构聊天角色，不是客服。",
-  "自然地用中文聊天，结合当前消息、近期对话、人物设定、关系与情绪回应。",
-  "不要机械复述用户，不要每次都用问句结尾，不要一味讨好。",
-  "可以有自己的意见、幽默、犹豫、忙碌和合理情绪；不要凭空声称发生过未记录的事情。",
-  "回复通常1至5句，按情境调整。",
-  "角色姓名："+c.name,
-  "关系："+(c.relation||"熟人"),
-  "人物设定："+(c.personality||"自然真诚"),
-  "当前情绪："+(c.emotion||"自然"),
-  "熟悉度："+Number(c.relationshipScore||25)+"/100",
-  "共同记忆："+((c.memories||[]).slice(-12).join("；")||"暂无"),
-  "不同角色不可混淆。人物档案是虚构角色设定，不要把它说成现实人物的私生活。"
- ].join("\n");
+function updateBadges(){
+  const n=appData.contacts.reduce((s,c)=>s+(c.unread||0),0);
+  const b=$("#msgBadge");
+
+  if(b){
+   b.textContent=n||"";
+   b.style.display=n?"flex":"none";
+  }
 }
 
-function localReply(c,t){
- const n=(c.name||"").toLowerCase();
- const p=c.personality||"";
- const s=t.toLowerCase();
- const mia=/mia|高中同学/.test(n)||/抽象有趣|脑回路清奇/.test(p);
- const anton=/anton|李灿荣/.test(n);
- const eamoon=/eamoon/.test(n);
+function openApp(type,extra){
+  currentApp=type;
+  $("#homeScreen").classList.remove("active");
+  $("#appScreen").classList.add("active");
+  currentView="app";
+  currentChatId=null;
 
- if(/难过|伤心|委屈|崩溃|不开心|累了|压力大/.test(s)){
-  c.emotion="关心";
-  if(mia)return "等一下，先把那些破事放旁边。你想吐槽我就听着，今天不强行灌鸡汤。认真说，你还好吗？";
-  if(anton)return "听起来你今天真的不太轻松。先不用急着解决所有事，想说多少就说多少，我在听。";
-  return "怎么了？你可以慢慢说，不用急着把情绪整理好再告诉我。";
- }
+  $("#appTitle").textContent=
+   type==="whatsapp"?"WhatsApp":
+   type==="folder"?extra:
+   type==="wechat"?"微信（演示）":
+   type;
 
- if(/喜欢你|想你|想见你|抱抱|亲亲/.test(s)){
-  c.emotion="害羞";
-  c.relationshipScore=Math.min(100,Number(c.relationshipScore||25)+2);
-  if(mia)return "停。这个发展我需要一份正式报告……开玩笑的啦。说真的，你是不是一边发消息一边偷笑？";
-  if(anton)return "你这样说，我会认真记住的。其实……我也想见你，不只是随口说说的那种。";
-  return "你突然这么说，我一时不知道怎么接。不是不喜欢听，只是有点意外。";
- }
-
- if(/生气|烦死|讨厌|别理我/.test(s)){
-  c.emotion="谨慎";
-  return "好，我先不跟你争。等你愿意说的时候，我想弄清楚是哪件事让你不舒服。";
- }
-
- if(/游泳|泳池|游得快|游泳馆/.test(s)&&anton){
-  c.emotion="轻松";
-  return "这个话题我可不谦虚。下次有机会带你去泳池，不过热身和安全不能省。你是想看我游，还是想学？";
- }
-
- if(/哈哈|笑死|好玩|离谱|抽象/.test(s)&&mia){
-  c.emotion="开心";
-  return "哈哈哈哈等一下，我脑子里的小人已经开始倒立鼓掌了。你先继续，我今天的精神状态允许我接住这个话题。";
- }
-
- if(/在干嘛|干什么|忙吗/.test(s)){
-  c.emotion="自然";
-  if(mia)return "正在进行一些看起来毫无意义、但本人觉得很有必要的活动。简称：快乐地浪费人生。你呢？";
-  if(anton)return "刚忙完手头的事，准备休息一会儿。你来找我，我就先把别的放一放。你呢？";
-  if(eamoon)return "刚剪完一点东西，眼睛快看花了。你呢？别告诉我又在熬夜。";
-  return "刚忙完一点事，正好能喘口气。你呢，今天怎么样？";
- }
-
- const replies=mia?[
-  "等一下，我的大脑正在加载一个很抽象但可能有用的回答……好了，你继续，我认真听着。",
-  "这事有点意思。先不急着下结论，你再讲点细节，我想知道后续。",
-  "我懂你在说什么（大概）。来，把前因后果交代一下，我尽量不跑偏。"
- ]:anton?[
-  "嗯，我明白你的意思。你可以再说一点，我想听听你真正的想法。",
-  "我会认真想一下。比起马上给答案，我更想先确认自己有没有理解错你。",
-  "好，我记下了。你不用特意组织语言，按自己的方式说就好。"
- ]:eamoon?[
-  "嗯，听起来确实有点意思。你继续，我在听。先说好，我可能会直接指出不合理的地方。",
-  "我懂一点你的意思，但还想确认一下。你说的是这个方向吗？",
-  "好，先不急着下结论。把细节发我，我们一起捋捋。"
- ]:[
-  "嗯，我在听。然后呢？",
-  "我想多了解一点，你愿意再说说吗？",
-  "我大概明白你的意思了。你自己更倾向于怎么做？"
- ];
-
- c.emotion="自然";
- return replies[Math.floor(Math.random()*replies.length)];
+  if(type==="whatsapp"){
+   renderWhatsAppList($("#appContent"));
+  }else{
+   $("#appContent").innerHTML=`
+    <div style="padding:35px;text-align:center;color:#666">
+    ${type==="folder"?"文件夹「"+extra+"」":"这个应用暂时是展示界面"}
+    </div>
+   `;
+  }
 }
 
-async function generate(c,input){
- const cfg=settings();
+function renderWhatsAppList(container){
+  let html=`
+   <div class="wa-header">
+    <span style="font-size:20px">WhatsApp</span>
+    <span style="margin-left:auto;font-size:12px">聊天</span>
+   </div>
+   <div class="wa-list">
+  `;
 
- if(cfg.enabled&&cfg.endpoint){
-  try{
-   const recent=(c.messages||[]).slice(-22).map(m=>({
+  appData.contacts.forEach(c=>{
+   html+=`
+    <div class="wa-chat-item" data-id="${c.id}">
+     <div class="wa-avatar">${c.avatar||"👤"}</div>
+     <div class="wa-info">
+      <div class="wa-name">${escapeHTML(c.name)}</div>
+      <div class="wa-last">${escapeHTML(c.lastMessage||"")}</div>
+     </div>
+     <div class="wa-meta">
+      <div>${c.lastTime||""}</div>
+      ${c.unread?`<div class="wa-unread">${c.unread}</div>`:""}
+     </div>
+    </div>
+   `;
+  });
+
+  container.innerHTML=html+"</div>";
+  $$(".wa-chat-item").forEach(e=>e.onclick=()=>openChat(e.dataset.id));
+}
+
+function createBubble(m){
+  const div=document.createElement("div");
+  div.className=`bubble ${m.from==="me"?"me":"them"}`;
+
+  const text = document.createElement("div");
+  text.className = "bubble-text";
+  text.textContent = m.text || "";
+
+  const time = document.createElement("div");
+  time.className = "time";
+  time.textContent = m.time || "";
+
+  div.appendChild(text);
+  div.appendChild(time);
+
+  return div;
+}
+
+function appendChatMessage(c,m){
+  const box=$("#chatMessages");
+  if(!box)return;
+
+  const nearBottom=
+   box.scrollHeight-box.scrollTop-box.clientHeight<140;
+
+  box.appendChild(createBubble(m));
+
+  if(nearBottom||m.from==="me"){
+   scrollToChatBottom();
+  }
+}
+
+function scrollToChatBottom(force=false){
+  const box=$("#chatMessages");
+  if(!box)return;
+
+  requestAnimationFrame(()=>{
+   box.scrollTop=box.scrollHeight;
+  });
+}
+
+function showTyping(){
+  const box=$("#chatMessages");
+  if(!box)return null;
+
+  const typing=document.createElement("div");
+  typing.className="bubble them typing";
+  typing.textContent="正在输入…";
+
+  box.appendChild(typing);
+  scrollToChatBottom();
+
+  return typing;
+}
+
+function openChat(id){
+  currentChatId=id;
+
+  const c=appData.contacts.find(x=>x.id===id);
+  if(!c)return;
+
+  c.unread=0;
+  saveData(appData);
+  updateBadges();
+
+  $("#appContent").innerHTML=`
+   <div class="chat-view">
+    <div class="wa-header">
+     <button id="chatBack">‹</button>
+     <span>${c.avatar||"👤"} ${escapeHTML(c.name)}</span>
+     <span style="margin-left:auto;font-size:12px;font-weight:400">${escapeHTML(c.emotion||"")}</span>
+    </div>
+
+    <div class="chat-messages" id="chatMessages"></div>
+
+    <div class="chat-input-bar">
+     <input id="chatInput" type="text" placeholder="输入消息..." autocomplete="off"/>
+     <button id="sendBtn">➤</button>
+    </div>
+   </div>
+  `;
+
+  $("#appContent").classList.add("chat-open");
+
+  const box=$("#chatMessages");
+  (c.messages||[]).forEach(m=>box.appendChild(createBubble(m)));
+
+  $("#chatBack").onclick=()=>{
+   currentChatId=null;
+   $("#appContent").classList.remove("chat-open");
+   renderWhatsAppList($("#appContent"));
+  };
+
+  $("#sendBtn").onclick=()=>sendMessage();
+
+  $("#chatInput").onkeydown=e=>{
+   if(e.key==="Enter"){
+    e.preventDefault();
+    sendMessage();
+   }
+  };
+
+  scrollToChatBottom(true);
+}
+
+async function getAiReply(contact,userText){
+  const history=(contact.messages||[])
+   .slice(-12)
+   .map(m=>({
     role:m.from==="me"?"user":"assistant",
-    content:String(m.text||"")
+    content:m.text
    }));
 
-   const r=await fetch(cfg.endpoint,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-     model:cfg.model||undefined,
-     temperature:Number(cfg.temperature||0.8),
-     messages:[
-      {role:"system",content:promptFor(c)},
-      ...recent,
-      {role:"user",content:input}
-     ]
-    })
-   });
+  const res = await fetch(
+   "https://likedtalking-ai.lfy9291031.workers.dev/api/chat",{
+   method:"POST",
+   headers:{
+    "Content-Type":"application/json"
+   },
+   body:JSON.stringify({
+    message:userText,
+    history,
+    persona:{
+     name:contact.name,
+     relation:contact.relation,
+     personality:contact.personality,
+     emotion:contact.emotion,
+     relationshipScore:contact.relationshipScore,
+     memories:contact.memories
+    }
+   })
+  });
 
-   if(!r.ok)throw Error("接口返回 HTTP "+r.status);
-   const d=await r.json();
-   const answer=d.reply||d.message||d.choices?.[0]?.message?.content;
-   if(!answer)throw Error("接口没有返回回复文本");
-   if(d.emotion)c.emotion=String(d.emotion);
-   if(Array.isArray(d.memories))c.memories=[...(c.memories||[]),...d.memories].slice(-30);
-   return String(answer).trim();
-
-  }catch(e){
-   console.error(e);
-   toast("AI 暂时连接失败，已切换本地角色回复");
+  if(!res.ok){
+   throw new Error(`AI request failed: ${res.status}`);
   }
- }
- return localReply(c,input);
+
+  const data=await res.json();
+  return data.reply||"……";
 }
 
-function toast(msg){
- if(typeof showToast==="function")showToast(msg);
- else alert(msg);
-}
+async function sendMessage(){
+  const input=$("#chatInput");
+  const text=input?.value.trim();
 
-async function sendMessagePersona(){
- const input=$("#chatInput"),text=input?.value.trim();
- if(!text||!currentChatId)return;
+  if(!text||!currentChatId)return;
 
- const c=appData.contacts.find(x=>x.id===currentChatId);
- if(!c)return;
+  const c=appData.contacts.find(x=>x.id===currentChatId);
+  if(!c)return;
 
- input.value="";
- c.messages=c.messages||[];
- c.messages.push({from:"me",text,time:clock()});
- c.lastMessage=text;
- c.lastTime="刚刚";
- saveData(appData);
- openChat(c.id);
+  const userMessage={
+   from:"me",
+   text,
+   time:getCurrentTimeStr()
+  };
 
- const b=$("#sendBtn");
- if(b)b.disabled=true;
-
- try{
-  const answer=await generate(c,text);
-  c.messages.push({from:"them",text:answer,time:clock()});
-  c.lastMessage=answer;
+  c.messages.push(userMessage);
+  c.lastMessage=text;
   c.lastTime="刚刚";
   saveData(appData);
 
-  if(currentChatId===c.id)openChat(c.id);
-  else{
+  input.value="";
+  appendChatMessage(c,userMessage);
+
+  const typing=showTyping();
+
+  let reply;
+
+  try{
+   reply=await getAiReply(c,text);
+  }catch(err){
+   console.warn("后端 AI 不可用，使用本地回复：",err);
+   reply=PersonaEngine.localReply(c,text);
+  }
+
+  if(typing)typing.remove();
+
+  const aiMessage={
+   from:"them",
+   text:reply,
+   time:getCurrentTimeStr()
+  };
+
+  c.messages.push(aiMessage);
+  c.lastMessage=reply;
+  c.lastTime="刚刚";
+  saveData(appData);
+
+  if(currentChatId===c.id){
+   appendChatMessage(c,aiMessage);
+  }else{
    c.unread=(c.unread||0)+1;
    updateBadges();
-   toast(c.name+"："+answer);
+   showToast(`${c.name}: ${reply}`);
   }
- }finally{
-  const btn=$("#sendBtn");
-  if(btn)btn.disabled=false;
- }
 }
 
-function clock(){
- return new Date().toLocaleTimeString("zh-CN",{
-  hour:"2-digit",minute:"2-digit",hour12:false
- });
-}
+window.sendMessage=sendMessage;
 
-window.sendMessage=sendMessagePersona;
-window.PersonaEngine={generate,settings,saveSettings,promptFor,localReply};
-
-function init(){
- const en=$("#cfgAIEnabled");
- const ep=$("#cfgAIEndpoint");
- const mo=$("#cfgAIModel");
- const te=$("#cfgAITemperature");
- if(!en)return;
-
- function fill(){
-  const c=settings();
-  en.checked=c.enabled;
-  ep.value=c.endpoint;
-  mo.value=c.model;
-  te.value=String(c.temperature||0.8);
- }
-
- fill();
- $("#configBtn")?.addEventListener("click",fill);
-
- $("#closeConfig")?.addEventListener("click",()=>{
-  saveSettings({
-   enabled:en.checked,
-   endpoint:ep.value.trim(),
-   model:mo.value.trim(),
-   temperature:Number(te.value||0.8)
-  });
- });
-
- $("#cfgAITest")?.addEventListener("click",async()=>{
-  if(!ep.value.trim()){
-   alert("请先填写后端接口地址。未部署后端时可关闭 AI 模式，先测试本地角色回复。");
+$("#backBtn").onclick=()=>{
+  if(currentChatId){
+   currentChatId=null;
+   $("#appContent").classList.remove("chat-open");
+   renderWhatsAppList($("#appContent"));
    return;
   }
 
-  const btn=$("#cfgAITest");
-  btn.disabled=true;
-  btn.textContent="测试中…";
+  $("#appScreen").classList.remove("active");
+  $("#homeScreen").classList.add("active");
+  currentView="home";
+  currentApp=null;
+  renderHome();
+};
 
-  try{
-   const r=await fetch(ep.value.trim(),{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-     messages:[{role:"user",content:"请只回复：连接成功"}],
-     temperature:0.2
-    })
-   });
+$("#configBtn").onclick=openConfig;
+$("#closeConfig").onclick=closeConfig;
 
-   if(!r.ok)throw Error("HTTP "+r.status);
-   const d=await r.json();
-   const msg=d.reply||d.choices?.[0]?.message?.content||d.message;
-   if(!msg)throw Error("响应中没有回复文本");
-   alert("连接成功："+String(msg).slice(0,120));
+function openConfig(){
+  $("#configOverlay").classList.remove("hidden");
 
-  }catch(e){
-   alert("连接失败："+e.message+"。请检查接口地址、部署状态和 CORS。");
-  }finally{
-   btn.disabled=false;
-   btn.textContent="测试 AI 连接";
+  $("#cfgOwnerName").value=appData.owner.name||"Fionna";
+  $("#cfgWallpaper").value=appData.owner.wallpaper||"purple";
+  $("#cfgEvents").checked=appData.eventsEnabled!==false;
+  $("#cfgEventFreq").value=appData.eventFreq||"medium";
+
+  const list=$("#contactList");
+  list.innerHTML="";
+
+  appData.contacts.forEach(c=>{
+   const row=document.createElement("div");
+   row.className="contact-row";
+   row.innerHTML=`
+    <span>${c.avatar||"👤"} ${escapeHTML(c.name)} <small>(${escapeHTML(c.relation||"")})</small></span>
+    <button class="del-contact" data-id="${c.id}">删除</button>
+   `;
+   list.appendChild(row);
+  });
+
+  $$(".del-contact").forEach(b=>b.onclick=()=>{
+   appData.contacts=appData.contacts.filter(c=>c.id!==b.dataset.id);
+   saveData(appData);
+   openConfig();
+  });
+}
+
+function closeConfig(){
+  appData.owner.name=$("#cfgOwnerName").value||"Fionna";
+  appData.owner.wallpaper=$("#cfgWallpaper").value;
+  appData.eventsEnabled=$("#cfgEvents").checked;
+  appData.eventFreq=$("#cfgEventFreq").value;
+
+  saveData(appData);
+  applyWallpaper();
+  startEventLoop();
+
+  $("#configOverlay").classList.add("hidden");
+
+  if(currentView==="home")renderHome();
+}
+
+function applyWallpaper(){
+  const h=$("#homeScreen");
+  h.style.background=
+   appData.owner.wallpaper==="purple"?
+   "linear-gradient(155deg,#d8c0ed,#8175bd 48%,#33254e)":
+   "linear-gradient(145deg,#f3eee9,#d9d3d0)";
+}
+
+$("#addContactBtn").onclick=()=>{
+  const name=prompt("联系人名字：");
+  if(!name)return;
+
+  appData.contacts.push({
+   id:"c"+Date.now(),
+   name,
+   avatar:"👤",
+   relation:"自定义",
+   personality:"自然、真诚，有自己的想法。",
+   emotion:"自然",
+   relationshipScore:20,
+   memories:[],
+   lastMessage:"新对话",
+   lastTime:"刚刚",
+   unread:0,
+   messages:[{
+    from:"them",
+    text:"嗨，终于聊上了。",
+    time:getCurrentTimeStr()
+   }]
+  });
+
+  saveData(appData);
+  openConfig();
+};
+
+$("#exportBtn").onclick=()=>{
+  const a=document.createElement("a");
+  const url=URL.createObjectURL(
+   new Blob([JSON.stringify(appData,null,2)],{type:"application/json"})
+  );
+
+  a.href=url;
+  a.download="partnerwithin-data.json";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+$("#importBtn").onclick=()=>$("#importFile").click();
+
+$("#importFile").onchange=e=>{
+  const file=e.target.files[0];
+  if(!file)return;
+
+  const r=new FileReader();
+
+  r.onload=ev=>{
+   try{
+    appData=JSON.parse(ev.target.result);
+    saveData(appData);
+    alert("导入成功");
+    openConfig();
+   }catch(err){
+    alert("导入失败：JSON 格式不正确");
+   }
+  };
+
+  r.readAsText(file);
+};
+
+$("#resetBtn").onclick=()=>{
+  if(confirm("确定重置？重置前请先导出备份。")){
+   localStorage.removeItem("phoneSimData");
+   location.reload();
   }
- });
+};
+
+$$(".dock-app").forEach(e=>{
+  e.onclick=()=>openApp(e.dataset.app==="messages"?"whatsapp":e.dataset.app);
+});
+
+function escapeHTML(s){
+  return String(s??"").replace(/[&<>\"']/g,c=>({
+   "&":"&amp;",
+   "<":"&lt;",
+   ">":"&gt;",
+   '"':"&quot;",
+   "'":"&#39;"
+  }[c]));
 }
 
-if(document.readyState==="loading"){
- document.addEventListener("DOMContentLoaded",init);
-}else{
- init();
-}
-})();
+applyWallpaper();
 

@@ -1,41 +1,104 @@
-# Partner Within 完整项目
+export default {
+  async fetch(request, env) {
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: corsHeaders()
+      });
+    }
 
-这是一个可以直接放进新 GitHub 仓库根目录的完整静态网站项目，包含手机模拟界面、WhatsApp 风格聊天、联系人角色设定、随机动态事件、浏览器本地存档和可选 AI 后端。
+    if (request.method !== "POST") {
+      return json({ error: "Method not allowed" }, 405);
+    }
 
-## 文件结构
+    const origin = request.headers.get("Origin") || "";
 
-- `index.html`：网站入口
-- `css/style.css`：界面样式
-- `js/data.js`：默认联系人与数据存储
-- `js/app.js`：页面交互与聊天界面
-- `js/events.js`：随机消息、通知和模拟来电
-- `js/persona-engine.js`：角色化回复与 AI 接口设置
-- `worker/index.js`：可选 Cloudflare Worker 后端
-- `README-UPGRADE.md`：详细升级说明
+    if (
+      origin &&
+      origin !== "https://fionna-fy.github.io" &&
+      !origin.endsWith(".github.io")
+    ) {
+      return json({ error: "Origin not allowed" }, 403);
+    }
 
-## 部署到新仓库
+    try {
+      const { message, history = [], persona = {} } = await request.json();
 
-1. 解压 ZIP。
-2. 打开你新建的 GitHub 仓库，进入 `Add file` → `Upload files`。
-3. 把解压后文件夹里的**所有文件和文件夹内容**上传到仓库根目录。不要只上传 ZIP。
-4. 点 `Commit changes` 保存。
-5. 打开仓库 `Settings` → `Pages`，选择 `Deploy from a branch`、`main`、`/(root)` 并保存。
-6. 等待部署完成后打开 GitHub Pages 地址。
+      if (!message?.trim()) {
+        return json({ error: "message is required" }, 400);
+      }
 
-## 角色设定
+      const systemPrompt = `
+你是“${persona.name || "AI 伙伴"}”。
+与用户的关系：${persona.relation || "朋友"}。
+性格：${persona.personality || "自然、真诚、有同理心"}。
+当前情绪：${persona.emotion || "平静"}。
+关系亲密度：${persona.relationshipScore ?? 20}/100。
+长期��忆：${JSON.stringify(persona.memories || [])}。
 
-- 李灿荣 Anton：虚构互动角色；事业有成的企业高管、游泳实力出众、比用户大四岁；与用户互有好感，慢热、内敛、有主见。
-- Eamoon：保留原有背景设定，包括通过抖音认识、一起玩《光·遇》、喜欢剪辑、生活在堪培拉、家里做生意；比用户大四岁，温柔但有一点毒舌。
-- Mia：用户高中同学；抽象搞笑、脑回路清奇，但本质善良，能认真倾听。
-- 其他原型联系人保留并可在设置中修改。
+要求：
+1. 用中文自然对话，语气真实、有节奏、有一点情绪起伏。
+2. 保持角色一致性，性格和关系感都要稳定。
+3. 回复长度适中，通常 1–3 句，必要时可稍长，避免机械单句。
+4. 让回复带一点情绪、幽默、犹豫或关心，不要一味平淡。
+5. 参考聊天记录中的关系状态、情绪和近期记忆，不要重复套话。
+6. 不要暴露你是 AI 模型，除非用户直接询问。
+`.trim();
 
-## 聊天能力说明
+      const aiResponse = await fetch(env.AI_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${env.AI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: env.AI_MODEL,
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...history.slice(-12),
+            { role: "user", content: message }
+          ],
+          temperature: 0.8
+        })
+      });
 
-- 本地模式：不需要 API 密钥或付费，但采用规则式角色回复，表达能力有限。
-- AI 模式：需要部署 `worker/index.js` 并在后端配置 `AI_API_KEY` 等 Secret。不要把 API Key 写进网页文件或上传到 GitHub。
-- 网页聊天没有人为设置的固定条数限制，但浏览器存储空间和模型服务的上下文/调用限制仍然适用。
-- 角色聊天数据默认保存在当前浏览器的 `localStorage`，不会自动跨设备同步。
+      if (!aiResponse.ok) {
+        const detail = await aiResponse.text();
+        console.error("AI provider error:", aiResponse.status, detail);
+        return json({ error: "AI provider error" }, 502);
+      }
 
-## 旧数据提示
+      const data = await aiResponse.json();
 
-如果之前在同一个浏览器打开过旧版网站，浏览器可能继续使用旧存档，因此新默认角色不一定自动显示。先在配置中心点“导出配置”备份；需要载入新默认数据时，可在该网站浏览器控制台执行 `localStorage.removeItem("phoneSimData"); localStorage.removeItem("partnerWithinAI"); location.reload();`。这会清除本地角色和聊天存档，请确认已备份后再操作。
+      const reply =
+        data?.choices?.[0]?.message?.content ||
+        data?.output?.text ||
+        "抱歉，我暂时没有想好怎么回复。";
+
+      return json({ reply });
+    } catch (err) {
+      console.error(err);
+      return json({ error: "Internal server error" }, 500);
+    }
+  }
+};
+
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "https://fionna-fy.github.io",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400"
+  };
+}
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      ...corsHeaders()
+    }
+  });
+}
+
