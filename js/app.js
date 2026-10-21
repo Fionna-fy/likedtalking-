@@ -241,7 +241,7 @@ async function getAiReply(contact,userText){
   }));
 
  const res = await fetch(
-  "https://likedtalking-ai.你的Cloudflare子域.workers.dev/api/chat",{
+  "https://likedtalking-ai.lfy9291031.workers.dev/api/chat",{
   method:"POST",
   headers:{
    "Content-Type":"application/json"
